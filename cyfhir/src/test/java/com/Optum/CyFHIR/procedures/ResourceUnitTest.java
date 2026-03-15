@@ -416,4 +416,248 @@ public class ResourceUnitTest {
         assertNotNull(result);
         verify(tx, atLeast(2)).createNode(any(Label.class));
     }
+
+    // ---- getRelationshipsFromMap tests ----
+
+    @Test
+    void testGetRelationshipsFromMapCreatesChildNode() {
+        Transaction tx = mock(Transaction.class);
+        Node parentNode = mock(Node.class);
+        Node childNode = mock(Node.class);
+        when(tx.createNode(any(Label.class))).thenReturn(childNode);
+
+        Map<String, Object> json = new LinkedHashMap<>();
+        json.put("value", "test-value");
+
+        ArrayList<FhirRelationship> result = resource.getRelationshipsFromMap(tx, json, "name", parentNode, false, "res-id");
+        assertNotNull(result);
+    }
+
+    @Test
+    void testGetRelationshipsFromMapWithIsArrayTrue() {
+        Transaction tx = mock(Transaction.class);
+        Node parentNode = mock(Node.class);
+        Node childNode = mock(Node.class);
+        when(tx.createNode(any(Label.class))).thenReturn(childNode);
+
+        Map<String, Object> json = new LinkedHashMap<>();
+        json.put("system", "http://example.com");
+        json.put("code", "ABC");
+
+        ArrayList<FhirRelationship> result = resource.getRelationshipsFromMap(tx, json, "coding", parentNode, true, "res-id");
+        assertNotNull(result);
+    }
+
+    @Test
+    void testGetRelationshipsFromMapWithNestedReference() {
+        Transaction tx = mock(Transaction.class);
+        Node parentNode = mock(Node.class);
+        Node childNode = mock(Node.class);
+        when(tx.createNode(any(Label.class))).thenReturn(childNode);
+
+        Map<String, Object> json = new LinkedHashMap<>();
+        json.put("reference", "urn:uuid:patient-123");
+
+        ArrayList<FhirRelationship> result = resource.getRelationshipsFromMap(tx, json, "subject", parentNode, false, "res-id");
+        assertNotNull(result);
+        assertTrue(result.size() > 0);
+    }
+
+    @Test
+    void testGetRelationshipsFromMapWithEmptyJson() {
+        Transaction tx = mock(Transaction.class);
+        Node parentNode = mock(Node.class);
+        Node childNode = mock(Node.class);
+        when(tx.createNode(any(Label.class))).thenReturn(childNode);
+
+        Map<String, Object> json = new LinkedHashMap<>();
+
+        ArrayList<FhirRelationship> result = resource.getRelationshipsFromMap(tx, json, "empty", parentNode, false, "res-id");
+        assertNotNull(result);
+    }
+
+    // ---- createRelationships with valid child node ----
+
+    @Test
+    void testCreateRelationshipsWithValidChildNode() {
+        Transaction tx = mock(Transaction.class);
+        Node parentNode = mock(Node.class);
+        Node childNode = mock(Node.class);
+        when(tx.findNode(any(Label.class), eq("fullUrl"), eq("urn:uuid:child-1"))).thenReturn(childNode);
+
+        FhirRelationship rel = new FhirRelationship();
+        rel.setParentNode(parentNode);
+        rel.setChildRelationship("urn:uuid:child-1", "reference");
+
+        ArrayList<FhirRelationship> relationships = new ArrayList<>();
+        relationships.add(rel);
+
+        // Should not throw - relationship created successfully
+        resource.createRelationships(relationships, tx);
+        verify(tx).findNode(any(Label.class), eq("fullUrl"), eq("urn:uuid:child-1"));
+    }
+
+    @Test
+    void testCreateRelationshipsWithMultipleRelationships() {
+        Transaction tx = mock(Transaction.class);
+        Node parentNode = mock(Node.class);
+        Node childNode1 = mock(Node.class);
+        Node childNode2 = mock(Node.class);
+        when(tx.findNode(any(Label.class), eq("fullUrl"), eq("urn:uuid:child-1"))).thenReturn(childNode1);
+        when(tx.findNode(any(Label.class), eq("fullUrl"), eq("urn:uuid:child-2"))).thenReturn(childNode2);
+
+        FhirRelationship rel1 = new FhirRelationship();
+        rel1.setParentNode(parentNode);
+        rel1.setChildRelationship("urn:uuid:child-1", "reference");
+
+        FhirRelationship rel2 = new FhirRelationship();
+        rel2.setParentNode(parentNode);
+        rel2.setChildRelationship("urn:uuid:child-2", "subject");
+
+        ArrayList<FhirRelationship> relationships = new ArrayList<>();
+        relationships.add(rel1);
+        relationships.add(rel2);
+
+        resource.createRelationships(relationships, tx);
+        verify(tx, times(2)).findNode(any(Label.class), eq("fullUrl"), anyString());
+    }
+
+    @Test
+    void testCreateRelationshipsWithParentNull() {
+        Transaction tx = mock(Transaction.class);
+        Node childNode = mock(Node.class);
+        when(tx.findNode(any(Label.class), eq("fullUrl"), eq("urn:uuid:child-1"))).thenReturn(childNode);
+
+        FhirRelationship rel = new FhirRelationship();
+        rel.setParentNode(null);
+        rel.setChildRelationship("urn:uuid:child-1", "reference");
+
+        ArrayList<FhirRelationship> relationships = new ArrayList<>();
+        relationships.add(rel);
+
+        // Should not throw - relationship skipped when parentNode is null
+        resource.createRelationships(relationships, tx);
+    }
+
+    // ---- Additional validateFHIR edge case tests ----
+
+    @Test
+    void testValidateFHIRWithValidationTrueAndR4() throws Exception {
+        Map<String, Object> configMap = new HashMap<>();
+        configMap.put("validation", true);
+        configMap.put("version", "R4");
+        String patientJson = "{\"resourceType\":\"Patient\",\"id\":\"test-123\"}";
+        IAnyResource result = resource.validateFHIR(patientJson, "Patient", configMap);
+        assertNotNull(result);
+    }
+
+    // ---- Additional stringToMap tests ----
+
+    @Test
+    void testStringToMapWithBooleans() throws IOException {
+        String json = "{\"active\":true,\"deceased\":false}";
+        Map<String, Object> result = resource.stringToMap(json);
+        assertEquals(true, result.get("active"));
+        assertEquals(false, result.get("deceased"));
+    }
+
+    @Test
+    void testStringToMapWithNullValue() throws IOException {
+        String json = "{\"value\":null}";
+        Map<String, Object> result = resource.stringToMap(json);
+        assertNull(result.get("value"));
+    }
+
+    // ---- nodeRecursion with multiple LinkedHashMaps in array ----
+
+    @Test
+    void testNodeRecursionWithMultipleLinkedHashMapsInArray() {
+        Transaction tx = mock(Transaction.class);
+        Node parentNode = mock(Node.class);
+        Node childNode1 = mock(Node.class);
+        Node childNode2 = mock(Node.class);
+        when(tx.createNode(any(Label.class))).thenReturn(parentNode, childNode1, childNode2);
+
+        Map<String, Object> json = new LinkedHashMap<>();
+        ArrayList<Object> list = new ArrayList<>();
+        LinkedHashMap<String, Object> item1 = new LinkedHashMap<>();
+        item1.put("system", "http://example.com");
+        LinkedHashMap<String, Object> item2 = new LinkedHashMap<>();
+        item2.put("system", "http://example2.com");
+        list.add(item1);
+        list.add(item2);
+        json.put("identifier", list);
+
+        FhirRecursiveObj result = resource.nodeRecursion(tx, json, "resource", false, "res-id");
+        assertNotNull(result);
+        verify(tx, atLeast(3)).createNode(any(Label.class));
+    }
+
+    @Test
+    void testNodeRecursionWithMixedPropertyTypes() {
+        Transaction tx = mock(Transaction.class);
+        Node mockNode = mock(Node.class);
+        when(tx.createNode(any(Label.class))).thenReturn(mockNode);
+
+        Map<String, Object> json = new LinkedHashMap<>();
+        json.put("stringProp", "hello");
+        json.put("intProp", 42);
+        json.put("boolProp", true);
+        json.put("doubleProp", 3.14);
+
+        FhirRecursiveObj result = resource.nodeRecursion(tx, json, "resource", true, "res-id");
+
+        assertNotNull(result);
+        verify(mockNode).setProperty("stringProp", "hello");
+        verify(mockNode).setProperty("intProp", 42);
+        verify(mockNode).setProperty("boolProp", true);
+        verify(mockNode).setProperty("doubleProp", 3.14);
+    }
+
+    // ---- addToDatabase additional tests ----
+
+    @Test
+    void testAddToDatabaseWithNestedResource() {
+        Transaction tx = mock(Transaction.class);
+        Node newNode = mock(Node.class);
+
+        ResourceIterator<Node> iterator = mock(ResourceIterator.class);
+        when(iterator.next()).thenThrow(new NoSuchElementException());
+        when(tx.findNodes(any(Label.class), eq("fullUrl"), anyString())).thenReturn(iterator);
+        when(tx.createNode(any(Label.class))).thenReturn(newNode);
+
+        Entry entry = new Entry();
+        Map<String, Object> resourceMap = new HashMap<>();
+        resourceMap.put("id", "nested-id");
+        resourceMap.put("resourceType", "Encounter");
+        LinkedHashMap<String, Object> nested = new LinkedHashMap<>();
+        nested.put("reference", "Patient/test-123");
+        resourceMap.put("subject", nested);
+        entry.setResource(resourceMap);
+
+        ArrayList<FhirRelationship> result = resource.addToDatabase(entry, tx);
+        assertNotNull(result);
+    }
+
+    // ---- attachLooseReferences additional tests ----
+
+    @Test
+    void testAttachLooseReferencesVerifiesCypherFormat() {
+        Transaction tx = mock(Transaction.class);
+        when(tx.execute(anyString())).thenReturn(mock(Result.class));
+
+        ArrayList<String> fullUrls = new ArrayList<>();
+        fullUrls.add("urn:uuid:abc");
+        fullUrls.add("urn:uuid:def");
+        fullUrls.add("urn:uuid:ghi");
+
+        resource.attachLooseReferences(fullUrls, tx);
+
+        verify(tx).execute(argThat(cypher ->
+            cypher.contains("urn:uuid:abc") &&
+            cypher.contains("urn:uuid:def") &&
+            cypher.contains("urn:uuid:ghi") &&
+            cypher.contains("MATCH (a) MATCH (b:entry")
+        ));
+    }
 }

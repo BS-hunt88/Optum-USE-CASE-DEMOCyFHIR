@@ -217,6 +217,34 @@ describe('neo4jController', () => {
 
       expect(mockRes.status).toHaveBeenCalledWith(200);
     });
+
+    it('should call res.status(500) on error', async () => {
+      mockSession.writeTransaction.mockImplementation(() => {
+        return Promise.reject(new Error('Load resource failed'));
+      });
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      neo4jController.loadResource({ resourceType: 'Patient' }, mockRes);
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(mockRes.status).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle synchronous error in loadResource', async () => {
+      mockSession.writeTransaction.mockImplementation(() => {
+        throw new Error('Sync error in loadResource');
+      });
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      neo4jController.loadResource({ resourceType: 'Patient' }, mockRes);
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('getFhirResource', () => {

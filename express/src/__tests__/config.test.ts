@@ -1,17 +1,16 @@
-// Mock elastic-apm-node before imports
-import config from '../config';
-import dotenv from 'dotenv';
-
+// Use require-style references that work with jest.mock hoisting
 const mockStart = jest.fn();
-const mockLogger = { error: jest.fn() };
+const mockLogger: { error: jest.Mock | ((...args: any[]) => void) } = { error: jest.fn() };
 
-jest.mock('elastic-apm-node', () => ({
-  __esModule: true,
-  default: {
-    start: mockStart,
-    logger: mockLogger
-  }
-}));
+jest.mock('elastic-apm-node', () => {
+  return {
+    __esModule: true,
+    default: {
+      start: mockStart,
+      logger: mockLogger
+    }
+  };
+});
 
 jest.mock('dotenv', () => ({
   __esModule: true,
@@ -19,6 +18,9 @@ jest.mock('dotenv', () => ({
     config: jest.fn()
   }
 }));
+
+import config from '../config';
+import dotenv from 'dotenv';
 
 describe('config', () => {
   const originalEnv = process.env;
@@ -86,10 +88,9 @@ describe('loggerError behavior', () => {
 
     // Simulate APM transport error via the logger.error handler
     const errorHandler = mockLogger.error;
-    if (typeof errorHandler === 'function') {
-      errorHandler('APM Server transport error: connection refused');
-      expect(stdoutSpy).toHaveBeenCalledWith('APM Server Missing\n');
-    }
+    expect(typeof errorHandler).toBe('function');
+    (errorHandler as Function)('APM Server transport error: connection refused');
+    expect(stdoutSpy).toHaveBeenCalledWith('APM Server Missing\n');
 
     stdoutSpy.mockRestore();
   });
@@ -102,13 +103,54 @@ describe('loggerError behavior', () => {
     config();
 
     const errorHandler = mockLogger.error;
-    if (typeof errorHandler === 'function') {
-      stdoutSpy.mockClear();
-      errorHandler('Some other error message');
-      // Should not have written APM Server Missing
-      const calls = stdoutSpy.mock.calls.filter(c => c[0] === 'APM Server Missing\n');
-      expect(calls.length).toBe(0);
-    }
+    expect(typeof errorHandler).toBe('function');
+    stdoutSpy.mockClear();
+    (errorHandler as Function)('Some other error message');
+    // Should not have written APM Server Missing
+    const calls = stdoutSpy.mock.calls.filter(c => c[0] === 'APM Server Missing\n');
+    expect(calls.length).toBe(0);
+
+    stdoutSpy.mockRestore();
+  });
+
+  it('should only log duplicate APM transport error once', () => {
+    mockStart.mockImplementation(() => { /* no-op */ });
+
+    const stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    config();
+
+    const errorHandler = mockLogger.error;
+    expect(typeof errorHandler).toBe('function');
+
+    // Call with same error twice
+    (errorHandler as Function)('APM Server transport error: connection refused');
+    (errorHandler as Function)('APM Server transport error: connection refused');
+
+    // Should only have been logged once (deduplication via Set)
+    const apmCalls = stdoutSpy.mock.calls.filter(c => c[0] === 'APM Server Missing\n');
+    expect(apmCalls.length).toBe(1);
+
+    stdoutSpy.mockRestore();
+  });
+
+  it('should log different APM transport errors separately', () => {
+    mockStart.mockImplementation(() => { /* no-op */ });
+
+    const stdoutSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    config();
+
+    const errorHandler = mockLogger.error;
+    expect(typeof errorHandler).toBe('function');
+
+    // Call with two different APM errors
+    (errorHandler as Function)('APM Server transport error: connection refused');
+    (errorHandler as Function)('APM Server transport error: timeout');
+
+    // Both should have been logged
+    const apmCalls = stdoutSpy.mock.calls.filter(c => c[0] === 'APM Server Missing\n');
+    expect(apmCalls.length).toBe(2);
 
     stdoutSpy.mockRestore();
   });

@@ -240,6 +240,17 @@
                         <phase>test</phase>
                         <goals><goal>report</goal></goals>
                     </execution>
+                    <execution>
+                        <id>report-excluding-validator</id>
+                        <phase>test</phase>
+                        <goals><goal>report</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/site/jacoco-excluding-validator</outputDirectory>
+                            <excludes>
+                                <exclude>com/Optum/CyFHIR/models/Validator.class</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
         </plugins>

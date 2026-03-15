@@ -116,10 +116,9 @@ public class ValidatorUnitTest {
     }
 
     @Test
-    void testValidateWithUnknownResourceTypeReturnsNull() throws Exception {
+    void testValidateWithUnknownResourceTypeThrowsException() throws Exception {
         Validator validator = new Validator("R4");
         String json = "{\"resourceType\":\"UnknownType\",\"id\":\"test\"}";
-        Object result = validator.validate(json, "UnknownType");
-        assertNull(result);
+        assertThrows(IllegalStateException.class, () -> validator.validate(json, "UnknownType"));
     }
 }

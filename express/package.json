@@ -7,7 +7,7 @@
     "start": "nodemon src/server.ts",
     "build": "tsc",
     "serve": "node dist/server.js",
-    "test": "jest",
+    "test": "jest --coverage",
     "lint": "eslint **/*.ts */controllers/*.ts */swagger/*.ts --fix"
   },
   "author": "",
@@ -31,7 +31,9 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.7",
+    "@types/jest": "^30.0.0",
     "@types/node": "^15.6.1",
+    "@types/supertest": "^7.2.0",
     "@types/swagger-jsdoc": "^6.0.0",
     "@types/swagger-ui-express": "^4.1.2",
     "@typescript-eslint/eslint-plugin": "^4.25.0",
@@ -41,7 +43,10 @@
     "eslint-plugin-import": "^2.23.4",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^5.1.0",
+    "jest": "^30.3.0",
     "nodemon": "^2.0.7",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.0.0"
   },
   "resolutions": {
